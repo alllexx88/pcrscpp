@@ -120,7 +120,7 @@ Or to remove all jobs at once:
 
 * `replace_inplace`: store replacement result in the passed string self
 * `replace_store`: replacement result is stored in public `std::string replace_result` field
-* `replace_copy`: resutrn replacement result as a copy
+* `replace_copy`: returns replacement result as a copy
 
 Use `std::vector<size_t> last_replace_count()` method to get vector of numbers of replaced
 pattern matches for each respective job.
@@ -143,7 +143,7 @@ pcrscpp::replace rx("s/\\\\/\\//g");
 
 ### Pattern string syntax
 
-Pattern string is passed directly to `pcre*_exec`, and thus has to follow PCRE syntax as
+Pattern string is passed directly to `pcre*_compile`, and thus has to follow PCRE syntax as
 described in [PCRE documentation].
 
 ### Substitute string syntax
