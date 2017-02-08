@@ -13,7 +13,7 @@ libpcrscpp (8-bit) can be built with a C\+\+98 compiler.
 
 ## PCRSCPP API
 
-PCRSCPP declarations can be found in <pcrscpp.h> header. Regular expression
+PCRSCPP declarations can be found in `<pcrscpp.h>` header. Regular expression
 based substitution jobs creation and execution classes are:
 
   * `pcrscpp::replace`
@@ -48,8 +48,8 @@ typedef pcrscpp_templates::replace<pchar, pstring, replace_impl> replace;
 }
 ```
 
-Note that <pcrscpp.h> defines `PCRE_UCHAR16` and `PCRE_UCHAR32` as `char16_t`
-and `char32_t`, respectively, before including <pcre.h>, unless they are already
+Note that `<pcrscpp.h>` defines `PCRE_UCHAR16` and `PCRE_UCHAR32` as `char16_t`
+and `char32_t`, respectively, before including `<pcre.h>`, unless they are already
 defined, which means that `pcrscpp16::pchar` and `pcrscpp32::pchar` definitions
 can be overridden. If they are overridden during libpcrscpp16/libpcrscpp32
 compilation, make sure that client code shares the same overridden defines.
