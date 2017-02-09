@@ -169,7 +169,7 @@ Substitute string backreferencing syntax is similar to Perl's:
 
   * `$1` ... `$n`: nth capturing subpattern matched.
   * `$&` and `$0`: the whole match
-  * `$+{label}`  : labled subpattern matched. `label` is up to 32 alphanumerical +
+  * `${label}`   : labled subpattern matched. `label` is up to 32 alphanumerical +
                    underscore characters (`'A'-'Z'`,`'a'-'z'`,`'0'-'9'`,`'_'`),
                    first character must be alphabetical
   * ``$` `` and `$'` (backtick and tick) refer to the areas of the subject before

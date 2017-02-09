@@ -355,8 +355,8 @@ bool replace_impl::parse_backref (pstring_impl::const_iterator& start,
         return true;
     }
 
-    if ((length < 5) || (*(start + 1) != _T_('+')) || (*(start + 2) != _T_('{')) ||
-        !((pcrscpp_isalpha(*(start + 3)))||(*(start + 3) == _T_('_'))))
+    if ((length < 4) || (*(start + 1) != _T_('{')) ||
+        !((pcrscpp_isalpha(*(start + 2)))||(*(start + 2) == _T_('_'))))
         // not a named reference too for sure,
         // so fail:
         // named references are accepted in format $+{name},
@@ -368,8 +368,8 @@ bool replace_impl::parse_backref (pstring_impl::const_iterator& start,
     // trying to get name from expected "$+{name}"
     pstring_impl buff;
     buff.reserve(32); // mentioned max length
-    buff.append(start + 3, start + 4);
-    for (pstring_impl::const_iterator it = start + 4;
+    buff.append(start + 2, start + 3);
+    for (pstring_impl::const_iterator it = start + 3;
          (it != end) &&
          ((pcrscpp_isalnum(*it)) || (*it == _T_('_')) || (*it == _T_('}'))); ++it) {
         if (*it == _T_('}')) {
