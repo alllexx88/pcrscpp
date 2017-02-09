@@ -103,7 +103,7 @@ public:
                     const bool& discard, std::vector<int>& new_match, substitute_job& job,
                     const int* offsets, const int& offset,
                     const pstring_impl& source);
-    void replace_inplace (pstring_impl* target_ptr);
+    void replace_inplace (pstring_impl& target);
 private:
     bool parse_flags (const pstring_impl& optstring, int& pcre_flags, int& pcrs_flags);
     bool parse_backref (pstring_impl::const_iterator& start,
@@ -778,21 +778,14 @@ pcrscpp_error_codes::error_code replace_impl::add_job_internal (const pstring_im
 
 /******************************************************************************
 
-Execute replacement jobs on source '*target_ptr', passed by reference inplace,
+Execute replacement jobs on source 'target', passed by reference inplace,
 and store replacements counts vector
-
-We use a pointer here to not build duplicate code for
-  * std::basic_string<PCRE_UCHAR16> and std::basic_string<char16_t>
-  * std::basic_string<PCRE_UCHAR32> and std::basic_string<char32_t>
-in C++11
 
 ******************************************************************************/
 
-void replace_impl::replace_inplace (pstring_impl* target_ptr) {
+void replace_impl::replace_inplace (pstring_impl& target) {
     replace_count.clear();
     replace_count.reserve(jobs.size());
-    if (target_ptr == pcrscpp_nullptr)
-        return;
     pstring_impl source;
     pstring_impl::size_type n,             // to store resulting size
                        plaintext_n;   // plaintext part's of replace size
@@ -800,7 +793,7 @@ void replace_impl::replace_inplace (pstring_impl* target_ptr) {
     std::list<std::vector<int> > matches;
     for (std::list<substitute_job>::iterator job = jobs.begin();
          job != jobs.end(); ++job) {
-        source.swap(*target_ptr);                  // source is what target used to be ;)
+        source.swap(target);                       // source is what target used to be ;)
         offset = 0;
         plaintext_n = n = flags = 0;
         count = job->br_hits.size();               // submatches/backrefs quantity
@@ -857,9 +850,9 @@ void replace_impl::replace_inplace (pstring_impl* target_ptr) {
         // Store matches count
         replace_count.push_back(matches.size());
         // now do the replacing.
-        target_ptr->clear(); // clear content, capacity untouched
+        target.clear(); // clear content, capacity untouched
         // reserve more space if needed:
-        target_ptr->reserve(n);
+        target.reserve(n);
         // the actual write to target
        {// hide from outer scope
         pstring_impl::iterator prev_match_border = source.begin();
@@ -868,7 +861,7 @@ void replace_impl::replace_inplace (pstring_impl* target_ptr) {
         {
             if (!discard) {
                 // not matching part isn't being discarded
-                target_ptr->append(prev_match_border,
+                target.append(prev_match_border,
                               source.begin() + (*match)[0]);     // not matching part
                 prev_match_border = source.begin() + (*match)[1];
             }
@@ -877,7 +870,7 @@ void replace_impl::replace_inplace (pstring_impl* target_ptr) {
                  replacement != job->replacement.end();
                  ++replacement)
             {
-                target_ptr->append(replacement->text);               // plaintext part
+                target.append(replacement->text);               // plaintext part
                 int br_n;
                 switch (replacement->backref.type) {
                     case pcrscpp_namespace::backref_types::backref_numerical:
@@ -885,22 +878,22 @@ void replace_impl::replace_inplace (pstring_impl* target_ptr) {
                         // Note: 'br_n' subpattern offsets are:
                         // (*match)[br_n*2] to (*match)[br_n*2 + 1]
                         if ((*match)[br_n*2] >= 0) // skip non-found optional subpatterns
-                            target_ptr->append(source.begin() + (*match)[br_n*2],
+                            target.append(source.begin() + (*match)[br_n*2],
                                           source.begin() + (*match)[br_n*2 + 1]);
                         break;
                     case pcrscpp_namespace::backref_types::backref_all:
                         // all match
-                        target_ptr->append(source.begin() + (*match)[0],
+                        target.append(source.begin() + (*match)[0],
                                           source.begin() + (*match)[1]);
                         break;
                     case pcrscpp_namespace::backref_types::backref_btick:
                         // source up to match
-                        target_ptr->append(source.begin(),
+                        target.append(source.begin(),
                                           source.begin() + (*match)[0]);
                     break;
                     case pcrscpp_namespace::backref_types::backref_tick:
                         // source after match
-                        target_ptr->append(source.begin() + (*match)[1],
+                        target.append(source.begin() + (*match)[1],
                                           source.end());
                         break;
                     case pcrscpp_namespace::backref_types::backref_bad:
@@ -1177,7 +1170,7 @@ std::vector<size_t> replace<pchar, pstring, replace_impl>::last_replace_count() 
 
 /******************************************************************************
 
-Execute replacement jobs on source '*target_ptr', passed by reference inplace,
+Execute replacement jobs on source 'target', passed by reference inplace,
 and store replacements counts vector
 
 ******************************************************************************/
@@ -1187,9 +1180,14 @@ void replace<pchar, pstring, replace_impl>::replace_inplace (pstring& target) {
     if (internal == pcrscpp_nullptr)
         return;
 
-    pstring_impl* target_ptr = (pstring_impl*)&target;
+    // a dirty drick, but we don't want to copy values,
+    // and pstring_impl can differ from pstring
+    pstring_impl target_impl;
+    target_impl.swap (*((pstring_impl*)&target));
 
-    internal->replace_inplace(target_ptr);
+    internal->replace_inplace(target_impl);
+
+    target_impl.swap (*((pstring_impl*)&target));
 }
 
 template <typename pchar, class pstring, class replace_impl>
