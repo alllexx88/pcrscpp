@@ -1,11 +1,18 @@
 .PHONY: all all_shared all_static all_8 all_16 all_32 shared_8 shared_16 shared_32 static_8 static_16 static_32 clean
 
-#compiler
-CXX=g++
-#archiver - for static libs
-AR=ar rcs
+###############################################################################
+# Some overridable build settings
 
+#compiler
+CXX:=g++
+#archiver - for static libs
+AR:=ar rcs
+#pkg-config
 PKG_CONFIG:=pkg-config
+# Set to "1" to disable C++11
+WITHOUT_CPP11:=0
+
+###############################################################################
 
 # get flags from pkg-config, ignore errors here
 PCRE_CFLAGS:=$(shell $(PKG_CONFIG) --cflags libpcre 2>/dev/null)
@@ -19,9 +26,11 @@ PCRE32_LIBS:=$(shell $(PKG_CONFIG) --libs libpcre32 2>/dev/null)
 
 CUMMON_LIBS:=
 
-COMMON_CFLAGS=\
--fPIC \
--std=c++11 # least recommended C++ standard, will not compile libpcrscpp32 without C++11 features support
+COMMON_CFLAGS=-fPIC
+
+ifneq (1,$(WITHOUT_CPP11))
+COMMON_CFLAGS+=-std=c++11 # recommended, but can do without
+endif
 
 COMMON_CFLAGS+=-O3 # Optimization level
 
@@ -128,13 +137,21 @@ test: obj/test.o
 	$(CXX) $^ $(LIBPCRSCPP_static) $(PCRE_LIBS) $(CUMMON_LIBS) -o $@
 
 obj/test16.o: src/test16.cpp $(LIBPCRSCPP16_static)|obj
+ifneq (1,$(WITHOUT_CPP11))
 	$(CXX) -Iinclude $(PCRE16_CFLAGS) $(COMMON_CFLAGS) -c src/test16.cpp -o obj/test16.o
+else
+	$(CXX) -Iinclude $(PCRE16_CFLAGS) $(filter-out -Werror,$(COMMON_CFLAGS)) -c src/test16.cpp -o obj/test16.o
+endif
 
 test16: obj/test16.o
 	$(CXX) $^ $(LIBPCRSCPP16_static) $(PCRE16_LIBS) $(CUMMON_LIBS) -o $@
 
 obj/test32.o: src/test32.cpp $(LIBPCRSCPP16_static)|obj
-	$(CXX) -Iinclude $(PCRE16_CFLAGS) $(COMMON_CFLAGS) -c src/test32.cpp -o obj/test32.o
+ifneq (1,$(WITHOUT_CPP11))
+	$(CXX) -Iinclude $(PCRE32_CFLAGS) $(COMMON_CFLAGS) -c src/test32.cpp -o obj/test32.o
+else
+	$(CXX) -Iinclude $(PCRE32_CFLAGS) $(filter-out -Werror,$(COMMON_CFLAGS)) -c src/test32.cpp -o obj/test32.o
+endif
 
 test32: obj/test32.o
 	$(CXX) $^ $(LIBPCRSCPP32_static) $(PCRE32_LIBS) $(CUMMON_LIBS) -o $@

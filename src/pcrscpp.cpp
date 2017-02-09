@@ -55,37 +55,26 @@ enum replace_flag {
     success = 32
 };
 }
-}
 
-namespace pcrscpp_templates {
-
-// Trigger template instantiation compilation
-template class replace<pcrscpp_namespace::pchar,
-pcrscpp_namespace::pstring, pcrscpp_namespace::replace_impl>;
-
-// Template structs
-template<class pstring>
 struct backref_t {
   pcrscpp_namespace::backref_types::backref_type type;
   int n;              // for backref_numerical
-  pstring name;       // for backref_named
+  pstring_impl name;       // for backref_named
 };
 
 // Plain text, backref series of the substitute
-template<class pstring>
 struct text_backref_pair {
-    pstring text;
-    backref_t<pstring> backref;
+    pstring_impl text;
+    backref_t backref;
 };
 
-template<class pstring>
 struct substitute_job {
     // PCRE pattern to replace
     pcrscpp_pcre* pattern;
     // PCRE hints
     pcrscpp_pcre_extra* hints;
     // replacement: consists of "plain text"-backreference pairs series
-    std::vector<text_backref_pair<pstring> > replacement;
+    std::vector<text_backref_pair> replacement;
     // replacement flags
     int flags;
     // backrefs hits: a number of occurrences of each
@@ -94,18 +83,6 @@ struct substitute_job {
     int br_all_hits, br_btick_hits, br_tick_hits; // hits for "$&"|"$0", "$`" and "$'",
                                                   // respectively
 };
-}
-
-namespace pcrscpp_namespace {
-
-typedef struct pcrscpp_templates::backref_t<pstring>
-    backref_t;
-
-typedef struct pcrscpp_templates::text_backref_pair<pstring>
-    text_backref_pair;
-
-typedef struct pcrscpp_templates::substitute_job<pstring>
-    substitute_job;
 
 class replace_impl {
 public:
@@ -117,71 +94,85 @@ public:
     void reset_error_stream ();
     std::vector<size_t> replace_count;
     pcrscpp_error_codes::error_code
-        add_job_internal (const pstring& pattern,
-                          const pstring& substitute,
-                          const pstring& options);
-    void add_match (pstring::size_type& n, const pstring::size_type& plaintext_n,
+        add_job_internal (const pstring_impl& pattern,
+                          const pstring_impl& substitute,
+                          const pstring_impl& options);
+    pcrscpp_error_codes::error_code
+        add_job_internal (const pstring_impl& command);
+    void add_match (pstring_impl::size_type& n, const pstring_impl::size_type& plaintext_n,
                     const bool& discard, std::vector<int>& new_match, substitute_job& job,
                     const int* offsets, const int& offset,
-                    const pstring& source);
+                    const pstring_impl& source);
+    void replace_inplace (pstring_impl* target_ptr);
 private:
-    bool parse_flags (const pstring& optstring, int& pcre_flags, int& pcrs_flags);
-    bool parse_backref (pstring::const_iterator& start,
-                         const pstring::const_iterator& end, backref_t& output);
+    bool parse_flags (const pstring_impl& optstring, int& pcre_flags, int& pcrs_flags);
+    bool parse_backref (pstring_impl::const_iterator& start,
+                         const pstring_impl::const_iterator& end, backref_t& output);
     bool
-        parse_substitute (const pstring& substitute, bool trivial_flag,
+        parse_substitute (const pstring_impl& substitute, bool trivial_flag,
                      std::vector<text_backref_pair> &replacement);
-    int pstring_to_int (const pstring& str);
+    int pstring_impl_to_int (const pstring_impl& str);
 };
 
 // error stream reset methods
 void replace_impl::reset_error_stream (const char str[]) {
+#if __cplusplus >= 201103L
+// C++11
     std::ostringstream(str).swap(error_stream);
+#else
+// older
+    error_stream.str(std::string(str));
+#endif
 }
 
 void replace_impl::reset_error_stream (const std::string& str) {
+#if __cplusplus >= 201103L
+// C++11
     std::ostringstream(str).swap(error_stream);
+#else
+// older
+    error_stream.str(str);
+#endif
 }
 
 void replace_impl::reset_error_stream () {
+#if __cplusplus >= 201103L
+// C++11
     std::ostringstream().swap(error_stream);
+#else
+// older
+    error_stream.str(std::string());
+#endif
 }
 
 // Simple tests for letters, digits,
 // locale unaware
-inline bool pcrscpp_isdigit (const pchar c) {
+inline bool pcrscpp_isdigit (const pchar_impl c) {
     return (c >= _T_('0') && (c <= _T_('9')));
 }
 
-inline bool pcrscpp_isalpha (const pchar c) {
+inline bool pcrscpp_isalpha (const pchar_impl c) {
     return ((c >= _T_('A')) && (c <= _T_('Z'))) ||
             ((c >= _T_('a')) && (c <= _T_('z')));
 }
 
-inline bool pcrscpp_isalnum (const pchar c) {
+inline bool pcrscpp_isalnum (const pchar_impl c) {
     return pcrscpp_isalpha(c) || pcrscpp_isdigit(c);
 }
 
-int replace_impl::pstring_to_int (const pstring& str){
-    pcrscpp_conv_string buff;
+int replace_impl::pstring_impl_to_int (const pstring_impl& str){
+    std::string buff;
+    // str passed here is expected to consist of digits only,
+    // which are ASCII symbols, so we can narrow string blindly
+    // (if not narrow already)
     buff.assign(str.begin(), str.end());
     int n;
-#ifndef pcrscpp_conv_istringstream
+#if __cplusplus >= 201103L
 // C++11 way
-  #ifndef pcrscpp_conv_char
-  // pcrscpp_conv_string is expected to be accepted by std::stoi()
-  // (ordinary string expected)
     n = std::stoi(buff);
-  #else
-  // convert to utf8 from 16/32 bit characters,
-  // and then call std::stoi()
-    n = std::stoi(std::wstring_convert<std::codecvt_utf8<pcrscpp_conv_char>,
-                  pcrscpp_conv_char>().to_bytes(buff));
-  #endif
 #else
-// The old way:
-// using string/wstring streams
-    pcrscpp_conv_istringstream iss(buff);
+// The old way: using string streams
+    std::istringstream iss(buff);
     iss >> n;
 #endif
 
@@ -191,10 +182,10 @@ int replace_impl::pstring_to_int (const pstring& str){
 // Add match and grow size.
 // Note: new_match is expected to be previously initialized
 // with the right size
-void replace_impl::add_match (pstring::size_type& n, const pstring::size_type& plaintext_n, const bool& discard,
+void replace_impl::add_match (pstring_impl::size_type& n, const pstring_impl::size_type& plaintext_n, const bool& discard,
                 std::vector<int>& new_match, substitute_job& job,
                 const int* offsets, const int& offset,
-                const pstring& source)
+                const pstring_impl& source)
 {
     n += plaintext_n                                    // plaintext replacement part size
       + (offsets[1] - offsets[0])*job.br_all_hits       // "$&"|"$0": all match
@@ -262,11 +253,11 @@ Parse options flags string. Following flags are accepted:
        be specifically aware of this in multiline mode
 
 ******************************************************************************/
-bool replace_impl::parse_flags (const pstring& optstring, int& pcre_flags,
+bool replace_impl::parse_flags (const pstring_impl& optstring, int& pcre_flags,
                                 int& pcrs_flags) {
     bool is_utf = false;
     pcre_flags = pcrs_flags = 0;
-    for(pstring::const_iterator it = optstring.begin(); it != optstring.end(); ++it)
+    for(pstring_impl::const_iterator it = optstring.begin(); it != optstring.end(); ++it)
         switch(*it) {
             case _T_('g'):
                 pcrs_flags |= replace_flags::global;
@@ -326,8 +317,8 @@ bool replace_impl::parse_flags (const pstring& optstring, int& pcre_flags,
 }
 
 
-bool replace_impl::parse_backref (pstring::const_iterator& start,
-                         const pstring::const_iterator& end, backref_t& output) {
+bool replace_impl::parse_backref (pstring_impl::const_iterator& start,
+                         const pstring_impl::const_iterator& end, backref_t& output) {
     long long length = std::distance(start, end);
     if ((length < 2) || (*start != _T_('$')))
         return false;
@@ -351,12 +342,12 @@ bool replace_impl::parse_backref (pstring::const_iterator& start,
             break;
         }
     if (pcrscpp_isdigit(*(start + 1))) { // numerical_reference
-        pstring buff;
+        pstring_impl buff;
         buff.reserve(length);
-        pstring::const_iterator it;
+        pstring_impl::const_iterator it;
         for (it = start + 1; (it != end) && (pcrscpp_isdigit(*it)); ++it)
             buff += *it;
-        output.n = pstring_to_int (buff);
+        output.n = pstring_impl_to_int (buff);
         output.type = backref_types::backref_numerical;
         // set start iterator to last 'consumed' character
         start = it - 1;
@@ -375,10 +366,10 @@ bool replace_impl::parse_backref (pstring::const_iterator& start,
         return false;
     // can be a proper named subpattern:
     // trying to get name from expected "$+{name}"
-    pstring buff;
+    pstring_impl buff;
     buff.reserve(32); // mentioned max length
     buff.append(start + 3, start + 4);
-    for (pstring::const_iterator it = start + 4;
+    for (pstring_impl::const_iterator it = start + 4;
          (it != end) &&
          ((pcrscpp_isalnum(*it)) || (*it == _T_('_')) || (*it == _T_('}'))); ++it) {
         if (*it == _T_('}')) {
@@ -426,7 +417,7 @@ Backreferences syntax is similar to Perl's regex replace:
 ******************************************************************************/
 
 bool
-replace_impl::parse_substitute (const pstring& substitute, bool trivial_flag,
+replace_impl::parse_substitute (const pstring_impl& substitute, bool trivial_flag,
                       std::vector<text_backref_pair> &replacement) {
     // clear passed vector
     replacement.clear();
@@ -442,7 +433,7 @@ replace_impl::parse_substitute (const pstring& substitute, bool trivial_flag,
     // count required vector capacity
     bool escaped = false;
     std::vector<text_backref_pair>::size_type n = 1;
-    for(pstring::const_iterator it = substitute.begin(); it != substitute.end(); ++it) {
+    for(pstring_impl::const_iterator it = substitute.begin(); it != substitute.end(); ++it) {
         if (escaped) {
             escaped = false;
             continue;
@@ -454,14 +445,14 @@ replace_impl::parse_substitute (const pstring& substitute, bool trivial_flag,
         if (*it == _T_('\\'))
             escaped = true;
     }
-    pstring text;
+    pstring_impl text;
 
     // allocate sufficient storage
     replacement.reserve(n);
     text.reserve(substitute.size());
 
     escaped = false;
-    for(pstring::const_iterator it = substitute.begin(); it != substitute.end(); ++it) {
+    for(pstring_impl::const_iterator it = substitute.begin(); it != substitute.end(); ++it) {
         if (*it == _T_('\\')) {
             if (escaped) {
                 text += *it; // *it == '\\'
@@ -477,28 +468,28 @@ replace_impl::parse_substitute (const pstring& substitute, bool trivial_flag,
             escaped = false;
             switch(*it) {
                 case _T_('t'):
-                    text += (pchar)(_T_('\t'));
+                    text += (pchar_impl)(_T_('\t'));
                     break;
                 case _T_('n'):
-                    text += (pchar)(_T_('\n'));
+                    text += (pchar_impl)(_T_('\n'));
                     break;
                 case _T_('r'):
-                    text += (pchar)(_T_('\r'));
+                    text += (pchar_impl)(_T_('\r'));
                     break;
                 case _T_('f'):
-                    text += (pchar)(_T_('\f'));
+                    text += (pchar_impl)(_T_('\f'));
                     break;
                 case _T_('a'):
-                    text += (pchar)(_T_('\a'));
+                    text += (pchar_impl)(_T_('\a'));
                     break;
                 case _T_('b'):
-                    text += (pchar)(_T_('\b'));
+                    text += (pchar_impl)(_T_('\b'));
                     break;
                 case _T_('e'):
-                    text += (pchar)(_T_('\e'));
+                    text += (pchar_impl)(_T_('\e'));
                     break;
                 case _T_('0'):
-                    text += (pchar)(_T_('\0'));
+                    text += (pchar_impl)(_T_('\0'));
                     break;
                 default:
                     text += *it;
@@ -548,8 +539,8 @@ Add job by pattern, substitute and options strings
 ******************************************************************************/
 
 pcrscpp_error_codes::error_code
-replace_impl::add_job_internal (const pstring& pattern, const pstring& substitute,
-                                const pstring& options) {
+replace_impl::add_job_internal (const pstring_impl& pattern, const pstring_impl& substitute,
+                                const pstring_impl& options) {
     // allocate new job
     jobs.push_back (substitute_job());
     // iterator to access allocated job
@@ -573,7 +564,7 @@ replace_impl::add_job_internal (const pstring& pattern, const pstring& substitut
     int erroroffset, error;
     if ((newjob->pattern =
         pcrscpp_pcre_compile (pattern.c_str(), pcre_flags, &errptr,
-                        &erroroffset, pcrspp_nullptr)) == pcrspp_nullptr) {
+                        &erroroffset, pcrscpp_nullptr)) == pcrscpp_nullptr) {
         reset_error_stream();
         error_stream << "PCRE compile error on offset " << erroroffset << ": "
             << errptr;
@@ -583,7 +574,7 @@ replace_impl::add_job_internal (const pstring& pattern, const pstring& substitut
     }
     // compile hints
     newjob->hints = pcrscpp_pcre_study (newjob->pattern, 0, &errptr);
-    if (errptr != pcrspp_nullptr) {
+    if (errptr != pcrscpp_nullptr) {
 	reset_error_stream();
         error_stream << "PCRE study error: " << errptr;
         free (newjob->pattern);
@@ -618,7 +609,7 @@ replace_impl::add_job_internal (const pstring& pattern, const pstring& substitut
                 break;
         }
         free (newjob->pattern);
-        if (newjob->hints != pcrspp_nullptr)
+        if (newjob->hints != pcrscpp_nullptr)
             free (newjob->hints);
 
         jobs.pop_back();
@@ -688,94 +679,16 @@ replace_impl::add_job_internal (const pstring& pattern, const pstring& substitut
     return pcrscpp_error_codes::no_error;
 }
 
-replace_impl::~replace_impl() {
-    for (std::list<substitute_job>::iterator it = jobs.begin(); it != jobs.end(); ++it) {
-        if (it->pattern != pcrspp_nullptr)
-            free (it->pattern);
-        if (it->hints != pcrspp_nullptr)
-            free (it->hints);
-    }
-}
-}
-
-namespace pcrscpp_templates {
-
-template <typename pchar, class pstring, class replace_impl>
-size_t replace<pchar, pstring, replace_impl>::jobs_n() {
-    if (internal == pcrspp_nullptr) {
-        return 0;
-    }
-    return internal->jobs.size();
-}
-
-template <typename pchar, class pstring, class replace_impl>
-bool replace<pchar, pstring, replace_impl>::pop_job_back() {
-    if ((internal == pcrspp_nullptr) || (internal->jobs.size() == 0)) {
-        return false;
-    }
-    internal->jobs.pop_back();
-    return true;
-}
-
-template <typename pchar, class pstring, class replace_impl>
-bool replace<pchar, pstring, replace_impl>::pop_job_front() {
-    if ((internal == pcrspp_nullptr) || (internal->jobs.size() == 0)) {
-        return false;
-    }
-    internal->jobs.pop_front();
-    return true;
-}
-
-template <typename pchar, class pstring, class replace_impl>
-bool replace<pchar, pstring, replace_impl>::pop_job(size_t n) {
-    if (internal == pcrspp_nullptr) {
-        return false;
-    }
-
-    typename std::list<substitute_job<pstring> >::iterator
-               it = internal->jobs.begin(),
-               end = internal->jobs.end();
-
-    for (size_t i = 0; i < n; ++it) {
-        if (it == end)
-            return false;
-    }
-    internal->jobs.erase(it);
-
-    return true;
-}
-
-template <typename pchar, class pstring, class replace_impl>
-void replace<pchar, pstring, replace_impl>::remove_jobs() {
-    if (internal != pcrspp_nullptr) {
-        for (typename std::list<substitute_job<pstring> >::iterator
-               it = internal->jobs.begin();
-               it != internal->jobs.end(); ++it) {
-            if (it->pattern != pcrspp_nullptr)
-                free (it->pattern);
-            if (it->hints != pcrspp_nullptr)
-                free (it->hints);
-        }
-        internal->jobs.clear();
-    }
-}
-
-template <typename pchar, class pstring, class replace_impl>
-pcrscpp_error_codes::error_code replace<pchar, pstring, replace_impl>::add_job (const pchar* command)
-{
-    return add_job((pstring)command);
-}
-
 /******************************************************************************
 
 Parse "s/pattern/substitute/options" to get separate respective strings,
-and call internal->add_job_internal(pattern,substitute,options).
+and call add_job_internal(pattern,substitute,options).
 
 Any character, except backslash ('\'), can be used as delimiter instead of '/',
 as long as it's escaped in input pattern, substitute, options.
 
 Will return pcrscpp_error_codes::err_cmdsyntax in 'command' input
-before calling internal->add_job_internal() in the following cases:
+before calling add_job_internal() in the following cases:
     * 'command' length less than 4 (must at least be "s///")
     *  first character is not 's'
     *  delimiter (second character) is backslash ('\')
@@ -783,41 +696,38 @@ before calling internal->add_job_internal() in the following cases:
 
 ******************************************************************************/
 
-template <typename pchar, class pstring, class replace_impl>
-pcrscpp_error_codes::error_code replace<pchar, pstring, replace_impl>::add_job
-(const pstring& command)
+pcrscpp_error_codes::error_code replace_impl::add_job_internal (const pstring_impl& command)
 {
-    pstring pattern, substitute, options;
-    if (internal == pcrspp_nullptr)
-        internal = new replace_impl();
+    pstring_impl pattern, substitute, options;
+
     if (command.size() == 0) {
-        internal->reset_error_stream("Invalid command syntax: command cannot be empty");
+        reset_error_stream("Invalid command syntax: command cannot be empty");
         return pcrscpp_error_codes::err_cmdsyntax;
     }
     if (command[0] != _T_('s')) {
-        internal->reset_error_stream("Invalid command syntax [position 1]: command must start with 's'");
+        reset_error_stream("Invalid command syntax [position 1]: command must start with 's'");
         return pcrscpp_error_codes::err_cmdsyntax;
     }
     if (command.size() == 1) {
-        internal->reset_error_stream("Invalid command syntax [position 1]: unexpeted command end");
+        reset_error_stream("Invalid command syntax [position 1]: unexpeted command end");
         return pcrscpp_error_codes::err_cmdsyntax;
     }
     if (command[1] == _T_('\\')) {
-        internal->reset_error_stream("Invalid command syntax [position 2]: cannot use '\\' as a delimiter");
+        reset_error_stream("Invalid command syntax [position 2]: cannot use '\\' as a delimiter");
         return pcrscpp_error_codes::err_cmdsyntax;
     }
-    pchar delimiter = command[1];
+    pchar_impl delimiter = command[1];
     int del_count;
     bool escaped;
-    typename pstring::const_iterator copy_start = command.begin(), it;
-    pstring buff;
+    pstring_impl::const_iterator copy_start = command.begin(), it;
+    pstring_impl buff;
     for (it = command.begin(), del_count = 0, escaped = false; (it != command.end()) && (del_count < 4); ++it) {
         buff.clear();
         if (escaped) {
             if (*it == delimiter) { // append escaped delimiter
                 buff += delimiter;
             } else { // append both backslash and character
-                buff += (pchar)_T_('\\');
+                buff += (pchar_impl)_T_('\\');
                 buff += *it;
             }
             escaped = false;
@@ -852,39 +762,275 @@ pcrscpp_error_codes::error_code replace<pchar, pstring, replace_impl>::add_job
     }
 
     if (del_count < 3) {
-        internal->reset_error_stream();
-        internal->error_stream << "Invalid command syntax [position " << command.size()
+        reset_error_stream();
+        error_stream << "Invalid command syntax [position " << command.size()
                                << "]: unexpeted command end";
         return pcrscpp_error_codes::err_cmdsyntax;
     }
     if (del_count > 3) {
-        internal->reset_error_stream();
-        internal->error_stream << "Invalid command syntax [position " << std::distance(command.begin(), it) + 1
+        reset_error_stream();
+        error_stream << "Invalid command syntax [position " << std::distance(command.begin(), it) + 1
                                << "]: delimiter unexpected in 'options' substring";
         return pcrscpp_error_codes::err_cmdsyntax;
     }
-    return internal->add_job_internal (pattern, substitute, options);
+    return add_job_internal (pattern, substitute, options);
 }
+
+/******************************************************************************
+
+Execute replacement jobs on source '*target_ptr', passed by reference inplace,
+and store replacements counts vector
+
+We use a pointer here to not build duplicate code for
+  * std::basic_string<PCRE_UCHAR16> and std::basic_string<char16_t>
+  * std::basic_string<PCRE_UCHAR32> and std::basic_string<char32_t>
+in C++11
+
+******************************************************************************/
+
+void replace_impl::replace_inplace (pstring_impl* target_ptr) {
+    replace_count.clear();
+    replace_count.reserve(jobs.size());
+    if (target_ptr == pcrscpp_nullptr)
+        return;
+    pstring_impl source;
+    pstring_impl::size_type n,             // to store resulting size
+                       plaintext_n;   // plaintext part's of replace size
+    int offset, count, flags;
+    std::list<std::vector<int> > matches;
+    for (std::list<substitute_job>::iterator job = jobs.begin();
+         job != jobs.end(); ++job) {
+        source.swap(*target_ptr);                  // source is what target used to be ;)
+        offset = 0;
+        plaintext_n = n = flags = 0;
+        count = job->br_hits.size();               // submatches/backrefs quantity
+        matches.clear();                           // clear previous matches
+        int offsets [(count + 1) * 3];
+        bool discard = (job->flags &
+                        pcrscpp_namespace::replace_flags::discard_non_matching) != 0,
+             global = (job->flags &
+                        pcrscpp_namespace::replace_flags::global) != 0,
+             multiline = (job->flags &
+                        pcrscpp_namespace::replace_flags::multiline) != 0,
+             notempty = (job->flags &
+                        pcrscpp_namespace::replace_flags::notempty) != 0;
+        if (notempty)
+            flags |= PCRE_NOTEMPTY;
+        for (std::vector<text_backref_pair>::iterator it = job->replacement.begin(),
+             end = job->replacement.end();
+             it != end; plaintext_n += it->text.size(), ++it);
+        while (pcrscpp_pcre_exec(job->pattern, job->hints, source.c_str(),
+                                        (int)source.size(), offset, flags, offsets,
+                                        (count + 1) * 3) > 0)
+        {
+            // store matches and calculate size
+            matches.push_back(std::vector<int>((count + 1) * 2, -1)); // match offsets are stored in first 2/3
+            std::list<std::vector<int> >::iterator new_match = --(matches.end());
+            add_match (n, plaintext_n, discard, *new_match, *job,
+                       offsets, offset, source);      // update size and add match
+
+            if (!global)
+                break;                                // global replace not requested
+            offset = offsets[1];                      // new offset, after current match
+            if (offsets[1] > offsets[0])
+                continue;                             // non-empty match
+            // empty match
+            if ((pcrscpp_pcre_exec(job->pattern, job->hints, source.c_str(),
+                        (int)source.size(), offset, PCRE_NOTEMPTY, offsets,
+                                        (count + 1) * 3) > 0) && (offset == offsets[0]))
+            { // don't miss non-empty match on the same offset
+                matches.push_back(std::vector<int>((count + 1) * 2, -1));
+                new_match = --(matches.end());
+                add_match (n, plaintext_n, discard, *new_match, *job,
+                           offsets, offset, source);
+                offset = offsets[1];
+                continue;
+            }
+            // there's no non-empty match on the same offset,
+            // so advance 1 step, unless multiline and on "\r\n":
+            // advance 2 steps in the latter case
+            ++offset;
+            if ((multiline) && (source.begin() + offset != source.end()) &&
+                   (source[offset-1] == _T_('\r')) && (source[offset] == _T_('\n')))
+                ++offset;                   // was on "\r\n" on empty match
+        }
+        // Store matches count
+        replace_count.push_back(matches.size());
+        // now do the replacing.
+        target_ptr->clear(); // clear content, capacity untouched
+        // reserve more space if needed:
+        target_ptr->reserve(n);
+        // the actual write to target
+       {// hide from outer scope
+        pstring_impl::iterator prev_match_border = source.begin();
+        for (std::list<std::vector<int> >::iterator match = matches.begin();
+             match != matches.end(); ++match)
+        {
+            if (!discard) {
+                // not matching part isn't being discarded
+                target_ptr->append(prev_match_border,
+                              source.begin() + (*match)[0]);     // not matching part
+                prev_match_border = source.begin() + (*match)[1];
+            }
+            for (std::vector<text_backref_pair>::iterator
+                 replacement = job->replacement.begin();
+                 replacement != job->replacement.end();
+                 ++replacement)
+            {
+                target_ptr->append(replacement->text);               // plaintext part
+                int br_n;
+                switch (replacement->backref.type) {
+                    case pcrscpp_namespace::backref_types::backref_numerical:
+                        br_n = replacement->backref.n;
+                        // Note: 'br_n' subpattern offsets are:
+                        // (*match)[br_n*2] to (*match)[br_n*2 + 1]
+                        if ((*match)[br_n*2] >= 0) // skip non-found optional subpatterns
+                            target_ptr->append(source.begin() + (*match)[br_n*2],
+                                          source.begin() + (*match)[br_n*2 + 1]);
+                        break;
+                    case pcrscpp_namespace::backref_types::backref_all:
+                        // all match
+                        target_ptr->append(source.begin() + (*match)[0],
+                                          source.begin() + (*match)[1]);
+                        break;
+                    case pcrscpp_namespace::backref_types::backref_btick:
+                        // source up to match
+                        target_ptr->append(source.begin(),
+                                          source.begin() + (*match)[0]);
+                    break;
+                    case pcrscpp_namespace::backref_types::backref_tick:
+                        // source after match
+                        target_ptr->append(source.begin() + (*match)[1],
+                                          source.end());
+                        break;
+                    case pcrscpp_namespace::backref_types::backref_bad:
+                        // bad backrefs ignored
+                    case pcrscpp_namespace::backref_types::backref_dummy:
+                        // dummy ones too
+                    case pcrscpp_namespace::backref_types::backref_named:
+                        // named ones must have already been converted to numerical
+                    default:
+                        break;
+                }
+            }
+        }}
+    }
+}
+
+replace_impl::~replace_impl() {
+    for (std::list<substitute_job>::iterator it = jobs.begin(); it != jobs.end(); ++it) {
+        if (it->pattern != pcrscpp_nullptr)
+            free (it->pattern);
+        if (it->hints != pcrscpp_nullptr)
+            free (it->hints);
+    }
+}
+}
+
+namespace pcrscpp_templates {
 
 template <typename pchar, class pstring, class replace_impl>
 pcrscpp_error_codes::error_code replace<pchar, pstring, replace_impl>::add_job
 (const pstring& pattern, const pstring& substitute, const pstring& options)
 {
-    if (internal == pcrspp_nullptr)
+    if (internal == pcrscpp_nullptr)
         internal = new replace_impl(); // should never be needed unless messed up
 
-    return internal->add_job_internal(pattern, substitute, options);
+    pstring_impl pattern_impl, substitute_impl, options_impl;
+
+    pattern_impl.assign(pattern.begin(), pattern.end());
+    substitute_impl.assign(substitute.begin(), substitute.end());
+    options_impl.assign(options.begin(), options.end());
+
+    return internal->add_job_internal(pattern_impl, substitute_impl, options_impl);
 }
 
 template <typename pchar, class pstring, class replace_impl>
 pcrscpp_error_codes::error_code replace<pchar, pstring, replace_impl>::add_job
 (const pchar* pattern, const pchar* substitute, const pchar* options)
 {
-    if (internal == pcrspp_nullptr)
+
+    return add_job(pstring(pattern), pstring(substitute), pstring(options));
+}
+
+template <typename pchar, class pstring, class replace_impl>
+pcrscpp_error_codes::error_code replace<pchar, pstring, replace_impl>::add_job (const pchar* command)
+{
+    return add_job((pstring)command);
+}
+
+template <typename pchar, class pstring, class replace_impl>
+pcrscpp_error_codes::error_code replace<pchar, pstring, replace_impl>::add_job
+(const pstring& command)
+{
+    if (internal == pcrscpp_nullptr)
         internal = new replace_impl(); // should never be needed unless messed up
 
-    return internal->add_job_internal(pstring(pattern), pstring(substitute),
-                                      pstring(options));
+    pstring_impl command_impl;
+
+    command_impl.assign(command.begin(), command.end());
+
+    return internal->add_job_internal(command_impl);
+}
+
+template <typename pchar, class pstring, class replace_impl>
+size_t replace<pchar, pstring, replace_impl>::jobs_n() {
+    if (internal == pcrscpp_nullptr) {
+        return 0;
+    }
+    return internal->jobs.size();
+}
+
+template <typename pchar, class pstring, class replace_impl>
+bool replace<pchar, pstring, replace_impl>::pop_job_back() {
+    if ((internal == pcrscpp_nullptr) || (internal->jobs.size() == 0)) {
+        return false;
+    }
+    internal->jobs.pop_back();
+    return true;
+}
+
+template <typename pchar, class pstring, class replace_impl>
+bool replace<pchar, pstring, replace_impl>::pop_job_front() {
+    if ((internal == pcrscpp_nullptr) || (internal->jobs.size() == 0)) {
+        return false;
+    }
+    internal->jobs.pop_front();
+    return true;
+}
+
+template <typename pchar, class pstring, class replace_impl>
+bool replace<pchar, pstring, replace_impl>::pop_job(size_t n) {
+    if (internal == pcrscpp_nullptr) {
+        return false;
+    }
+
+    std::list<pcrscpp_namespace::substitute_job>::iterator
+               it = internal->jobs.begin(),
+               end = internal->jobs.end();
+
+    for (size_t i = 0; i < n; ++it) {
+        if (it == end)
+            return false;
+    }
+    internal->jobs.erase(it);
+
+    return true;
+}
+
+template <typename pchar, class pstring, class replace_impl>
+void replace<pchar, pstring, replace_impl>::remove_jobs() {
+    if (internal != pcrscpp_nullptr) {
+        for (std::list<pcrscpp_namespace::substitute_job>::iterator
+               it = internal->jobs.begin();
+               it != internal->jobs.end(); ++it) {
+            if (it->pattern != pcrscpp_nullptr)
+                free (it->pattern);
+            if (it->hints != pcrscpp_nullptr)
+                free (it->hints);
+        }
+        internal->jobs.clear();
+    }
 }
 
 /******************************************************************************
@@ -894,7 +1040,7 @@ Return a copy of last error message
 ******************************************************************************/
 template <typename pchar, class pstring, class replace_impl>
 std::string replace<pchar, pstring, replace_impl>::last_error_message() {
-    if (internal != pcrspp_nullptr)
+    if (internal != pcrscpp_nullptr)
         return internal->error_stream.str();
     else
         return std::string();
@@ -960,12 +1106,12 @@ replace<pchar, pstring, replace_impl>::replace
 
 template <typename pchar, class pstring, class replace_impl>
 replace<pchar, pstring, replace_impl>::~replace() {
-    if (internal != pcrspp_nullptr) {
-        for (typename std::list<substitute_job<pstring> >::iterator
+    if (internal != pcrscpp_nullptr) {
+        for (std::list<pcrscpp_namespace::substitute_job>::iterator
             it = internal->jobs.begin(); it != internal->jobs.end(); ++it) {
-            if (it->pattern != pcrspp_nullptr)
+            if (it->pattern != pcrscpp_nullptr)
                 free (it->pattern);
-            if (it->hints != pcrspp_nullptr)
+            if (it->hints != pcrscpp_nullptr)
                 free (it->hints);
         }
         internal->jobs.clear();
@@ -1023,7 +1169,7 @@ fields equal to replace counts for respective jobs
 ******************************************************************************/
 template <typename pchar, class pstring, class replace_impl>
 std::vector<size_t> replace<pchar, pstring, replace_impl>::last_replace_count() {
-    if (internal == pcrspp_nullptr)
+    if (internal == pcrscpp_nullptr)
         return std::vector<size_t>();
 
     return internal->replace_count;
@@ -1031,151 +1177,30 @@ std::vector<size_t> replace<pchar, pstring, replace_impl>::last_replace_count() 
 
 /******************************************************************************
 
-Execute replacement jobs on source 'target', passed by reference inplace,
+Execute replacement jobs on source '*target_ptr', passed by reference inplace,
 and store replacements counts vector
 
 ******************************************************************************/
 
 template <typename pchar, class pstring, class replace_impl>
 void replace<pchar, pstring, replace_impl>::replace_inplace (pstring& target) {
-    internal->replace_count.clear();
-    if (internal == pcrspp_nullptr)
+    if (internal == pcrscpp_nullptr)
         return;
-    internal->replace_count.reserve(internal->jobs.size());
-    pstring source;
-    typename pstring::size_type n,             // to store resulting size
-                    plaintext_n;   // plaintext part's of replace size
-    int offset, count, flags;
-    std::list<std::vector<int> > matches;
-    for (typename std::list<substitute_job<pstring> >::iterator
-         job = internal->jobs.begin();
-         job != internal->jobs.end(); ++job) {
-        source.swap(target);                       // source is what target used to be ;)
-        offset = 0;
-        plaintext_n = n = flags = 0;
-        count = job->br_hits.size();               // submatches/backrefs quantity
-        matches.clear();                           // clear previous matches
-        int offsets [(count + 1) * 3];
-        bool discard = (job->flags &
-                        pcrscpp_namespace::replace_flags::discard_non_matching) != 0,
-             global = (job->flags &
-                        pcrscpp_namespace::replace_flags::global) != 0,
-             multiline = (job->flags &
-                        pcrscpp_namespace::replace_flags::multiline) != 0,
-             notempty = (job->flags &
-                        pcrscpp_namespace::replace_flags::notempty) != 0;
-        if (notempty)
-            flags |= PCRE_NOTEMPTY;
-        for (typename std::vector<text_backref_pair<pstring> >::iterator it = job->replacement.begin(),
-             end = job->replacement.end();
-             it != end; plaintext_n += it->text.size(), ++it);
-        while (pcrscpp_pcre_exec(job->pattern, job->hints, source.c_str(),
-                                        (int)source.size(), offset, flags, offsets,
-                                        (count + 1) * 3) > 0)
-        {
-            // store matches and calculate size
-            matches.push_back(std::vector<int>((count + 1) * 2, -1)); // match offsets are stored in first 2/3
-            std::list<std::vector<int> >::iterator new_match = --(matches.end());
-            internal->add_match (n, plaintext_n, discard, *new_match, *job,
-                       offsets, offset, source);      // update size and add match
 
-            if (!global)
-                break;                                // global replace not requested
-            offset = offsets[1];                      // new offset, after current match
-            if (offsets[1] > offsets[0])
-                continue;                             // non-empty match
-            // empty match
-            if ((pcrscpp_pcre_exec(job->pattern, job->hints, source.c_str(),
-                        (int)source.size(), offset, PCRE_NOTEMPTY, offsets,
-                                        (count + 1) * 3) > 0) && (offset == offsets[0]))
-            { // don't miss non-empty match on the same offset
-                matches.push_back(std::vector<int>((count + 1) * 2, -1));
-                new_match = --(matches.end());
-                internal->add_match (n, plaintext_n, discard, *new_match, *job,
-                           offsets, offset, source);
-                offset = offsets[1];
-                continue;
-            }
-            // there's no non-empty match on the same offset,
-            // so advance 1 step, unless multiline and on "\r\n":
-            // advance 2 steps in the latter case
-            ++offset;
-            if ((multiline) && (source.begin() + offset != source.end()) &&
-                   (source[offset-1] == _T_('\r')) && (source[offset] == _T_('\n')))
-                ++offset;                   // was on "\r\n" on empty match
-        }
-        // Store matches count
-        internal->replace_count.push_back(matches.size());
-        // now do the replacing.
-        target.clear(); // clear content, capacity untouched
-        // reserve more space if needed:
-        target.reserve(n);
-        // the actual write to target
-       {// hide from outer scope
-        typename pstring::iterator prev_match_border = source.begin();
-        for (std::list<std::vector<int> >::iterator match = matches.begin();
-             match != matches.end(); ++match)
-        {
-            if (!discard) {
-                // not matching part isn't being discarded
-                target.append(prev_match_border,
-                              source.begin() + (*match)[0]);     // not matching part
-                prev_match_border = source.begin() + (*match)[1];
-            }
-            for (typename std::vector<text_backref_pair<pstring> >::iterator
-                 replacement = job->replacement.begin();
-                 replacement != job->replacement.end();
-                 ++replacement)
-            {
-                target.append(replacement->text);               // plaintext part
-                int br_n;
-                switch (replacement->backref.type) {
-                    case pcrscpp_namespace::backref_types::backref_numerical:
-                        br_n = replacement->backref.n;
-                        // Note: 'br_n' subpattern offsets are:
-                        // (*match)[br_n*2] to (*match)[br_n*2 + 1]
-                        if ((*match)[br_n*2] >= 0) // skip non-found optional subpatterns
-                            target.append(source.begin() + (*match)[br_n*2],
-                                          source.begin() + (*match)[br_n*2 + 1]);
-                        break;
-                    case pcrscpp_namespace::backref_types::backref_all:
-                        // all match
-                        target.append(source.begin() + (*match)[0],
-                                          source.begin() + (*match)[1]);
-                        break;
-                    case pcrscpp_namespace::backref_types::backref_btick:
-                        // source up to match
-                        target.append(source.begin(),
-                                          source.begin() + (*match)[0]);
-                    break;
-                    case pcrscpp_namespace::backref_types::backref_tick:
-                        // source after match
-                        target.append(source.begin() + (*match)[1],
-                                          source.end());
-                        break;
-                    case pcrscpp_namespace::backref_types::backref_bad:
-                        // bad backrefs ignored
-                    case pcrscpp_namespace::backref_types::backref_dummy:
-                        // dummy ones too
-                    case pcrscpp_namespace::backref_types::backref_named:
-                        // named ones must have already been converted to numerical
-                    default:
-                        break;
-                }
-            }
-        }}
-    }
+    pstring_impl* target_ptr = (pstring_impl*)&target;
+
+    internal->replace_inplace(target_ptr);
 }
 
 template <typename pchar, class pstring, class replace_impl>
 void replace<pchar, pstring, replace_impl>::free_error_message () {
-    if (internal != pcrspp_nullptr)
+    if (internal != pcrscpp_nullptr)
         internal->reset_error_stream();
 }
 
 template <typename pchar, class pstring, class replace_impl>
 void replace<pchar, pstring, replace_impl>::free_counts_info () {
-    if (internal != pcrspp_nullptr)
+    if (internal != pcrscpp_nullptr)
         std::vector<size_t>().swap(internal->replace_count);
 }
 }

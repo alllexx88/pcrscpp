@@ -2,11 +2,16 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#if __cplusplus >= 201103L
 #include <locale>
 #include <codecvt>
+#else
+#warning "Without C++11: not internal UTF32 support: test32 only linked to test for undefined references in the static libpcrscpp32"
+#endif
 
 int main (int argc, char *argv[]) {
 	pcrscpp32::replace rx;
+#if __cplusplus >= 201103L
 	if (argc < 3) {
 		std::cerr << "Error: need at lease 2 args: <command> [<command2> <command3> ...] <file>" << std::endl;
 		return 1;
@@ -52,6 +57,9 @@ int main (int argc, char *argv[]) {
 	}
 
 	file.close();
+#else
+	std::cerr << "No internal UTF32 support: doing nothing..." << std::endl;
+#endif
 
 	return 0;
 }

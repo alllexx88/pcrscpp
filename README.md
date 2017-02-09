@@ -6,10 +6,7 @@ regular expression based substitution, similar to the one provided by
 Perl's 's' operator. Originally inspired by PCRS C library (see [PCRS (3)]),
 it does not suffer from PCRS subpatterns capturing number limit, provides
 some additional features (see below), as well as support for 16- and
-32-bit character strings. The latter currently requires C\+\+11
-features (u16string, u32string and UTF8<->UTF16, UTF8<->UTF32 conversion),
-hence libpcrscpp16 and libpcrscpp32 need a C\+\+11 capable compiler, while
-libpcrscpp (8-bit) can be built with a C\+\+98 compiler.
+32-bit character strings.
 
 ## PCRSCPP API
 
@@ -34,25 +31,45 @@ typedef pcrscpp_templates::replace<pchar, pstring, replace_impl> replace;
 }
 
 namespace pcrscpp16 {
+// Different typedefs for at least C++11 and older,
+// but we build respective template instantiation(s) for both
+// char16_t and PCRE_UCHAR16 when building PCRSCPP with C++11 capable
+// compiler, so that lib can be used with both C++11, and legacy code
+#if __cplusplus >= 201103L
+// C++11 or better
+typedef char16_t pchar;
+#else
 typedef PCRE_UCHAR16 pchar;
+#endif
+
 typedef std::basic_string<pchar> pstring;
 class replace_impl;
 typedef pcrscpp_templates::replace<pchar, pstring, replace_impl> replace;
 }
 
 namespace pcrscpp32 {
+#if __cplusplus >= 201103L
+typedef char32_t pchar;
+#else
 typedef PCRE_UCHAR32 pchar;
+#endif
+
 typedef std::basic_string<pchar> pstring;
 class replace_impl;
 typedef pcrscpp_templates::replace<pchar, pstring, replace_impl> replace;
 }
 ```
 
-Note that `<pcrscpp.h>` defines `PCRE_UCHAR16` and `PCRE_UCHAR32` as `char16_t`
-and `char32_t`, respectively, before including `<pcre.h>`, unless they are already
-defined, which means that `pcrscpp16::pchar` and `pcrscpp32::pchar` definitions
-can be overridden. If they are overridden during libpcrscpp16/libpcrscpp32
-compilation, make sure that client code shares the same overridden defines.
+As seen from definitions above, if compiler supports C\+\+11 features, `<pcrscpp.h>`
+defines `pcrscpp16::pchar` and `pcrscpp32::pchar` as `char16_t` and `char32_t`, respectively,
+otherwise, it sets them to `PCRE_UCHAR16` and `PCRE_UCHAR32`. This is done to provide
+seamless support for C\+\+11 `std::u16string` and `std::u32string`. To make C\+\+11 compiled
+PPCRSCPP libraries usable with legacy code,
+`replace<PCRE_UCHAR16, std::basic_string<PCRE_UCHAR16>, pcrscpp16::replace_impl>` and
+`replace<PCRE_UCHAR32, std::basic_string<PCRE_UCHAR32>, pcrscpp16::replace_impl>` template
+instantiations get compiled as well. Due to sharing the same implementation class with
+`pcrscpp16::replace` and `pcrscpp32::replace`, respectively, this leads to negligible growth
+in compiled libraries size.
 
 ### Creating and removing replace jobs
 
@@ -281,20 +298,24 @@ int main (int argc, char *argv[]) {
 PCRSCPP sources come shipped with a simple Makefile that should build 8, 16 and 32 bit
 libraries in any Unix environment, as long as standard build tools are available, and
 PCRE development files are installed. With minor modifications, the same Makefile can
-be used in Windows too, using MSYS MinGW
+be used in Windows too, using MSYS MinGW.
+
+By default, C\+\+11 standard is used.
+To build C++98 variant (opt out from setting `-std=c++11` flag), set `WITHOUT_CPP11`
+make variable to `1`:
 
 ```
-~/pcrscpp$ make
+~/pcrscpp$ make WITHOUT_CPP11=1
 rm -f obj/pcrscpp.o
-g++ -Iinclude  -fPIC -std=c++11  -O3  -g  -Wall  -Werror  -UPCRSCPP16 -UPCRSCPP32 -c src/pcrscpp.cpp -o obj/pcrscpp.o
+g++ -Iinclude  -fPIC -O3  -g  -Wall  -Werror  -UPCRSCPP16 -UPCRSCPP32 -c src/pcrscpp.cpp -o obj/pcrscpp.o
 rm -f libpcrscpp.so.0.0.1
 g++ -shared -Wl,-soname,libpcrscpp.so.0 -o libpcrscpp.so.0.0.1  obj/pcrscpp.o -lpcre 
 rm -f obj/pcrscpp16.o
-g++ -Iinclude  -fPIC -std=c++11  -O3  -g  -Wall  -Werror  -DPCRSCPP16 -UPCRSCPP32 -c src/pcrscpp.cpp -o obj/pcrscpp16.o
+g++ -Iinclude  -fPIC -O3  -g  -Wall  -Werror  -DPCRSCPP16 -UPCRSCPP32 -c src/pcrscpp.cpp -o obj/pcrscpp16.o
 rm -f libpcrscpp16.so.0.0.1
 g++ -shared -Wl,-soname,libpcrscpp16.so.0 -o libpcrscpp16.so.0.0.1  obj/pcrscpp16.o -lpcre16 
 rm -f obj/pcrscpp32.o
-g++ -Iinclude  -fPIC -std=c++11  -O3  -g  -Wall  -Werror  -UPCRSCPP16 -DPCRSCPP32 -c src/pcrscpp.cpp -o obj/pcrscpp32.o
+g++ -Iinclude  -fPIC -O3  -g  -Wall  -Werror  -UPCRSCPP16 -DPCRSCPP32 -c src/pcrscpp.cpp -o obj/pcrscpp32.o
 rm -f libpcrscpp32.so.0.0.1
 g++ -shared -Wl,-soname,libpcrscpp32.so.0 -o libpcrscpp32.so.0.0.1  obj/pcrscpp32.o -lpcre32 
 rm -f libpcrscpp.a
@@ -303,11 +324,17 @@ rm -f libpcrscpp16.a
 ar rcs libpcrscpp16.a obj/pcrscpp16.o
 rm -f libpcrscpp32.a
 ar rcs libpcrscpp32.a obj/pcrscpp32.o
-g++ -Iinclude  -fPIC -std=c++11  -O3  -g  -Wall  -Werror  -c src/test.cpp -o obj/test.o
+g++ -Iinclude  -fPIC -O3  -g  -Wall  -Werror  -c src/test.cpp -o obj/test.o
 g++ obj/test.o libpcrscpp.a -lpcre  -o test
-g++ -Iinclude  -fPIC -std=c++11  -O3  -g  -Wall  -Werror  -c src/test16.cpp -o obj/test16.o
+g++ -Iinclude  -fPIC -O3 -g -Wall -c src/test16.cpp -o obj/test16.o
+src/test16.cpp:9:2: warning: #warning "Without C++11: not internal UTF16 support: test16 only linked to test for undefined references in the static libpcrscpp16" [-Wcpp]
+ #warning "Without C++11: not internal UTF16 support: test16 only linked to test for undefined references in the static libpcrscpp16"
+  ^
 g++ obj/test16.o libpcrscpp16.a -lpcre16  -o test16
-g++ -Iinclude  -fPIC -std=c++11  -O3  -g  -Wall  -Werror  -c src/test32.cpp -o obj/test32.o
+g++ -Iinclude  -fPIC -O3 -g -Wall -c src/test32.cpp -o obj/test32.o
+src/test32.cpp:9:2: warning: #warning "Without C++11: not internal UTF32 support: test32 only linked to test for undefined references in the static libpcrscpp32" [-Wcpp]
+ #warning "Without C++11: not internal UTF32 support: test32 only linked to test for undefined references in the static libpcrscpp32"
+  ^
 g++ obj/test32.o libpcrscpp32.a -lpcre32  -o test32
 All done
 ```

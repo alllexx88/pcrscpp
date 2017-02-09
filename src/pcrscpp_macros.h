@@ -36,52 +36,47 @@
 #define TOKENPASTE2(x, y) TOKENPASTE_2(x, y)
 #define TOKENPASTE3(x, y, z) TOKENPASTE2(x, TOKENPASTE2(y, z) )
 
-#undef pcrspp_nullptr
+#undef pcrscpp_nullptr
 #undef PCRSCPP_BS // bits suffix
-#undef pcrscpp_conv_string
 #undef pcrscpp_conv_char
-#undef pcrscpp_conv_istringstream
 #undef _T_
 #undef PCRSCPP_PCRE_UNICODE
 
 #if __cplusplus >= 201103L // supports C++11 features
-# define pcrspp_nullptr nullptr
-
-# if defined(PCRSCPP16) || defined(PCRSCPP32)
-// for converting to utf8
-#  include <locale>
-#  include <codecvt>
-# endif
+# define pcrscpp_nullptr nullptr
 
 # ifdef PCRSCPP16
 // pcre16
 #  define PCRSCPP_BS 16
-#  define pcrscpp_conv_char char16_t
-#  define pcrscpp_conv_string std::u16string
 #  define _T_(a) TOKENPASTE2(u,a)
 #  define PCRSCPP_PCRE_UNICODE PCRE_UTF16
+#  define pcrscpp_conv_char PCRE_UCHAR16
 # elif defined(PCRSCPP32)
-// pcre 32
+// pcre32
 #  define PCRSCPP_BS 32
-#  define pcrscpp_conv_char char32_t
-#  define pcrscpp_conv_string std::u32string
 #  define _T_(a) TOKENPASTE2(U,a)
 #  define PCRSCPP_PCRE_UNICODE PCRE_UTF32
+#  define pcrscpp_conv_char PCRE_UCHAR32
 # else
 // pcre 8 bit
 #  define PCRSCPP_BS
-#  define pcrscpp_conv_string std::string
 #  define _T_(a) a
 #  define PCRSCPP_PCRE_UNICODE PCRE_UTF8
 # endif
 #else // no/partial C++11 features
-# define pcrspp_nullptr NULL
-#if defined (PCRSCPP16) ||  defined (PCRSCPP32)// pcre16
-#  error "PCRSCPP requires C++11 capable compiler to support 16/32 bit wide regular expressions"
+# define pcrscpp_nullptr NULL
+# ifdef PCRSCPP16
+// pcre16
+#  define PCRSCPP_BS 16
+#  define _T_(a) (PCRE_UCHAR16)(a)
+#  define PCRSCPP_PCRE_UNICODE PCRE_UTF16
+# elif defined(PCRSCPP32)
+// pcre32
+#  define PCRSCPP_BS 32
+#  define _T_(a) (PCRE_UCHAR32)(a)
+#  define PCRSCPP_PCRE_UNICODE PCRE_UTF32
 # else // pcre 8 bit
 #  define PCRSCPP_BS
-#  define pcrscpp_conv_string std::string
-#  define pcrscpp_conv_istringstream std::istringstream
 #  define _T_(a) a
 #  define PCRSCPP_PCRE_UNICODE PCRE_UTF8
 # endif
@@ -105,5 +100,23 @@
 #define pcrscpp_pcre_fullinfo TOKENPASTE3(pcre,PCRSCPP_BS,_fullinfo)
 #define pcrscpp_pcre_get_stringnumber TOKENPASTE3(pcre,PCRSCPP_BS,_get_stringnumber)
 #define pcrscpp_namespace TOKENPASTE2(pcrscpp,PCRSCPP_BS)
+
+namespace pcrscpp_templates {
+
+// Trigger template instantiation(s) compilation
+#ifdef pcrscpp_conv_char
+// std::u16string/std::u32string seamless support in C++11
+# define pchar_impl pcrscpp_conv_char
+# define pstring_impl std::basic_string<pcrscpp_conv_char>
+template class replace<pchar_impl,
+pstring_impl, pcrscpp_namespace::replace_impl>;
+#else
+# define pstring_impl pcrscpp_namespace::pstring
+# define pchar_impl pcrscpp_namespace::pchar
+#endif
+template class replace<pcrscpp_namespace::pchar,
+pcrscpp_namespace::pstring, pcrscpp_namespace::replace_impl>;
+
+}
 
 #endif // PCRECPP_MACROS_H_INCLUDED

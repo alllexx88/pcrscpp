@@ -21,19 +21,6 @@
 #ifndef PCRSCPP_H_
 #define PCRSCPP_H_
 
-#if __cplusplus >= 201103L // C++11 or better
-// Set default char types
-
-# ifndef PCRE_UCHAR16
-#  define PCRE_UCHAR16 char16_t
-# endif
-
-# ifndef PCRE_UCHAR32
-#  define PCRE_UCHAR32 char32_t
-# endif
-
-#endif
-
 #include <pcre.h>
 
 #include <string>
@@ -137,8 +124,17 @@ typedef pcrscpp_templates::replace<pchar, pstring, replace_impl> replace;
 
 namespace pcrscpp16 {
 
-// pcrs16 char
+// pcrs16 char:
+// Different typedefs for at least C++11 and older,
+// but we build respective template instantiation(s) for both
+// char16_t and PCRE_UCHAR16 when building PCRSCPP with C++11 capable
+// compiler, so that lib can be used with both C++11, and legacy code
+#if __cplusplus >= 201103L
+// C++11 or better
+typedef char16_t pchar;
+#else
 typedef PCRE_UCHAR16 pchar;
+#endif
 // pcrs16 string
 typedef std::basic_string<pchar> pstring;
 
@@ -152,7 +148,11 @@ typedef pcrscpp_templates::replace<pchar, pstring, replace_impl> replace;
 namespace pcrscpp32 {
 
 // pcrs32 char
+#if __cplusplus >= 201103L
+typedef char32_t pchar;
+#else
 typedef PCRE_UCHAR32 pchar;
+#endif
 // pcrs32 string
 typedef std::basic_string<pchar> pstring;
 
