@@ -818,8 +818,7 @@ void replace_impl::replace_inplace (pstring_impl& target) {
         {
             // store matches and calculate size
             matches.push_back(std::vector<int>((count + 1) * 2, -1)); // match offsets are stored in first 2/3
-            std::list<std::vector<int> >::iterator new_match = --(matches.end());
-            add_match (n, plaintext_n, discard, *new_match, *job,
+            add_match (n, plaintext_n, discard, matches.back(), *job,
                        offsets, offset, source);      // update size and add match
 
             if (!global)
@@ -833,8 +832,7 @@ void replace_impl::replace_inplace (pstring_impl& target) {
                                         (count + 1) * 3) > 0) && (offset == offsets[0]))
             { // don't miss non-empty match on the same offset
                 matches.push_back(std::vector<int>((count + 1) * 2, -1));
-                new_match = --(matches.end());
-                add_match (n, plaintext_n, discard, *new_match, *job,
+                add_match (n, plaintext_n, discard, matches.back(), *job,
                            offsets, offset, source);
                 offset = offsets[1];
                 continue;
@@ -855,11 +853,9 @@ void replace_impl::replace_inplace (pstring_impl& target) {
             continue;
         }
 
-        std::list<std::vector<int> >::iterator last_match = --(matches.end());
-
         if (!discard)
             // substring left after last match
-            n += distance(source.begin() + (*last_match)[1], source.end());
+            n += distance(source.begin() + matches.back()[1], source.end());
 
         // Store matches count
         replace_count.push_back(matches.size());
@@ -923,7 +919,7 @@ void replace_impl::replace_inplace (pstring_impl& target) {
         }}
         if (!discard)
             // substring left after last match
-            target.append (source.begin() + (*last_match)[1], source.end());
+            target.append (source.begin() + matches.back()[1], source.end());
     }
 }
 
