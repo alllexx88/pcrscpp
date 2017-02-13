@@ -847,6 +847,14 @@ void replace_impl::replace_inplace (pstring_impl& target) {
                    (source[offset-1] == _T_('\r')) && (source[offset] == _T_('\n')))
                 ++offset;                   // was on "\r\n" on empty match
         }
+        if (matches.empty()){
+            if (discard)
+                target.clear();
+            else
+                target.swap(source);
+            continue;
+        }
+
         std::list<std::vector<int> >::iterator last_match = --(matches.end());
 
         if (!discard)
