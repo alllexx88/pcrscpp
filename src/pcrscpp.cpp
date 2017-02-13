@@ -847,6 +847,12 @@ void replace_impl::replace_inplace (pstring_impl& target) {
                    (source[offset-1] == _T_('\r')) && (source[offset] == _T_('\n')))
                 ++offset;                   // was on "\r\n" on empty match
         }
+        std::list<std::vector<int> >::iterator last_match = --(matches.end());
+
+        if (!discard)
+            // substring left after last match
+            n += distance(source.begin() + (*last_match)[1], source.end());
+
         // Store matches count
         replace_count.push_back(matches.size());
         // now do the replacing.
@@ -907,6 +913,9 @@ void replace_impl::replace_inplace (pstring_impl& target) {
                 }
             }
         }}
+        if (!discard)
+            // substring left after last match
+            target.append (source.begin() + (*last_match)[1], source.end());
     }
 }
 
